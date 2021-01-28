@@ -1,0 +1,14 @@
+*.yml
+wf-scratch/
+scitech/
+Images2/
+annotations2/
+wf-output/
+workflow_v1.ipynb
+Untitled.ipynb
+Test.ipynb
+Scratch.ipynb
+.DS_Store
+.ipynb_checkpoints/
+Images_saved/
+
