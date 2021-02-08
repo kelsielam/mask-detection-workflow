@@ -3,6 +3,7 @@
 
 from PIL import Image
 import glob
+from numpy import asarray
 
 
 def norm_image(img):
@@ -10,10 +11,12 @@ def norm_image(img):
     Normalize PIL image
 
     """
-    img_nrm = img
+    pixels = asarray(img)
+    pixels = pixels.astype('float32')
+    pixels /= 255.0
+    img_nrm = Image.fromarray(pixels,'RGB')
 
     return img_nrm
-
 
 
 
