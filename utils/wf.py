@@ -36,7 +36,7 @@ def create_ann_list(filenames):
     return imgs, ann
 
 
-def create_preprocessed_filelist(filenames):
+def create_augmented_filelist(filenames, i):
     files_ids = []
 
     for filename in filenames:
@@ -46,6 +46,7 @@ def create_preprocessed_filelist(filenames):
         files_ids.append(digit)
     resized_files = []
     for ids in files_ids:
-        name = 'preprocessed_maksssksksss{}.png'.format(ids)
-        resized_files.append(File(name))
+    	for j in range(i):
+    		name = 'maksssksksss{}_aug_{}.png'.format(ids,j)
+    		resized_files.append(File(name))
     return resized_files
