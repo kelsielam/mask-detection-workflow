@@ -10,5 +10,6 @@ This is a research intern project by Kelsie.
 ### Goal 
 
 
+### Results
 
-
+<img src="imgs/group_mask_detection.png" />
