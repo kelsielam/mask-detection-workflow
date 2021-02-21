@@ -43,7 +43,7 @@ def create_augmented_filelist(filenames, i):
     for filename in filenames:
         stringList = filename.split(".")
         tempName = stringList[0]
-        digit = tempName[len(tempName)-1]
+        digit = re.findall(r'\d+', tempName)[0]
         files_ids.append(digit)
     resized_files = []
     for ids in files_ids:
