@@ -1,6 +1,7 @@
 import random
 from Pegasus.api import *
 import numpy as np
+import re
 
 def split_data_filenames(filenames):
 
@@ -25,7 +26,7 @@ def create_ann_list(filenames):
     for filename in filenames:
         stringList = filename.split(".")
         tempName = stringList[0]
-        digit = tempName[len(tempName)-1]
+        digit = re.findall(r'\d+', tempName)[0]
         files_ids.append(digit)
         fname = filename.split("/")[-1]
         imgs.append(File(fname))
