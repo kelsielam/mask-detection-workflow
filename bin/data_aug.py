@@ -54,7 +54,7 @@ class DataAugmentation():
 
 
     def add_gaussian_noise(self, img):
-        gaussian = np.random.normal(0, 0.2, (img.shape) )
+        gaussian = np.random.normal(0, 0.20, (img.shape) )
         return img + gaussian
 
     
