@@ -12,7 +12,7 @@ This is a research intern project by Kelsie.
 <img src="imgs/mask_dectection_wf.png" />
 
 ### Currently implemented jobs in Pegasus
-<img src="imgs/mask_detection.png" height="300" />
+<img src="imgs/mask_detection.png" />
 
 ### Goal 
 
