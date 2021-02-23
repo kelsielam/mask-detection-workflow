@@ -2,14 +2,17 @@
 
 This is a research intern project by Kelsie.
 
+
+### Usage
+
 ### Overview of the Workflow
 <img src="imgs/MaskDetection.png" />
 
 ### Detail view of jobs in the Workflow
 <img src="imgs/mask_dectection_wf.png" />
 
-### Usage
-
+### Currently implemented jobs in Pegasus
+<img src="imgs/mask_dectection.png" height="300" />
 
 ### Goal 
 
