@@ -47,6 +47,6 @@ def create_augmented_filelist(filenames, i):
     resized_files = []
     for ids in files_ids:
     	for j in range(i):
-    		name = 'maksssksksss{}_aug_{}.png'.format(ids,j)
+    		name = 'train_maksssksksss{}_aug_{}.png'.format(ids,j)
     		resized_files.append(File(name))
     return resized_files
