@@ -75,7 +75,7 @@ def main():
     for file in glob.glob( DATASET_DIR + "*.png"):
         augmented_imgs = augmentation.image_augment(file)
         label = file.split(".")[0]
-        name = label + "_aug_"
+        name = "train_" + label + "_aug_"
         i = 0
         for img in augmented_imgs:
             cv2.imwrite(DATASET_DIR + name + str(i) + '.png',img*255)# if you want to see the images do img*255
