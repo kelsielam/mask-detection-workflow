@@ -6,31 +6,31 @@ MACHINE LEARNING WORKFLOWS
 Model Training
 """
 import glob,os
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import numpy as np 
+import pandas as pd
 from bs4 import BeautifulSoup
 from PIL import Image
+import PIL
+import random
 import torch
 import torchvision
-
+from collections import Counter
 from torchvision import transforms, datasets, models
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import matplotlib.pyplot as plt
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import matplotlib.patches as patches
+import time
 
 
-DATASET_DIR = ""
-# Read in training data
-imgs   = list(sorted(os.listdir("data/images/")))
-labels = list(sorted(os.listdir("data/annotations/")))
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-DATASET_DIR = ""
 
 # ----------- HELPER FUNCTIONS ---------
 
 def generate_box(obj):
-    
+    """
+    returns the bounding box coordinates as a list
+    """
     xmin = int(obj.find('xmin').text)
     ymin = int(obj.find('ymin').text)
     xmax = int(obj.find('xmax').text)
@@ -39,13 +39,20 @@ def generate_box(obj):
     return [xmin, ymin, xmax, ymax]
 
 def generate_label(obj):
+    """
+    returns the class of the detected object
+    """
     if obj.find('name').text == "with_mask":
         return 1
-    elif obj.find('name').text == "mask_weared_incorrect":
-        return 2
-    return 0
+    elif obj.find('name').text == "without_mask":
+        return 0
+    return 2
 
 def generate_target(image_id, file): 
+    """
+    returns a dictionary target consisting of boxes, labels and image ID of the image
+    :input: image ID, annotation file
+    """
     with open(file) as f:
         data = f.read()
         soup = BeautifulSoup(data, "html.parser")
@@ -76,33 +83,42 @@ def collate_fn(batch):
 
 
 def get_model_instance_segmentation(num_classes):
+    """
+    initialise model
+    """
     # load an instance segmentation model pre-trained pre-trained on COCO
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
     # get number of input features for the classifier
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
     return model
 # ----------------------------------------------------------------
 
 
 #-------------- DATASET CLASS ------------------------------------
+
 class MaskDataset(object):
-    def __init__(self, transforms):
+    def __init__(self, prefix, transforms):
         self.transforms = transforms
-        self.imgs = list(sorted(os.listdir("data/images/")))
-        self.labels = list(sorted(os.listdir("data/annotations/")))
+        self.prefix = prefix
+        if prefix == "train_":
+            self.imgs = glob.glob(prefix+"*.png")+glob.glob("val_*.png")
+        else:
+            self.imgs = glob.glob(prefix+"*.png")
+        self.size = len(self.imgs)
 
     def __getitem__(self, idx):
         # load images ad masks
-        file_image = 'maksssksksss'+ str(idx) + '.png'
-        file_label = 'maksssksksss'+ str(idx) + '.xml'
-        img_path = os.path.join("data/images/", file_image)
-        label_path = os.path.join("data/annotations/", file_label)
-        img = Image.open(img_path).convert("RGB")
+
+        file_image = self.imgs[idx]
+        msk = len("maksssksksss")
+        ind = self.imgs[idx].split("_")[1][msk:-4]
+        file_label = 'maksssksksss'+ ind + '.xml'
+
+        img = Image.open(file_image).convert("RGB")
         #Generate Label
-        target = generate_target(idx, label_path)
+        target = generate_target(int(ind), file_label)
         
         if self.transforms is not None:
             img = self.transforms(img)
@@ -110,23 +126,54 @@ class MaskDataset(object):
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        return self.size
 
 
+def plot_image(img_tensor, pred, annotation):
+    """
+    :input: tensor of image, predicted output (pred) and ground truth (annotation) of the image
+    :output: returns plot of bounding boxes on the image
+    """
+    
+    fig,ax = plt.subplots(1)
+    img = img_tensor.cpu().data
+    ax.imshow(img.permute(1, 2, 0))
+    
+    for pred_b in pred[0]['boxes']:
+        xmin2, ymin2, xmax2, ymax2 = pred_b
+        pred = patches.Rectangle((xmin2,ymin2),(xmax2-xmin2),(ymax2-ymin2),linewidth=1,edgecolor='r',facecolor='none')
+        ax.add_patch(pred)
+   
+    for true_b in annotation[0]["boxes"]:
+        xmin1, ymin1, xmax1, ymax1 = true_b      
+        gt = patches.Rectangle((xmin1,ymin1),(xmax1-xmin1),(ymax1-ymin1),linewidth=1,edgecolor='g',facecolor='none')
+        ax.add_patch(gt)
+        
+    plt.show()
 
-
+    
 def validate(val_loader, model, criterion,device):
 
     model.eval()
     model.to(device)
-    accuracy = 0
-    test_loss = 0
+    running_test_loss = 0
 
     with torch.no_grad():
-        for sample_batched in val_loader:
-            pass
-
-    return model, test_loss_final, accuracy_final
+        for imgs, annotations in val_loader:
+            model.eval()
+            imgs = list(img.to(device) for img in imgs)
+            outputs = model(imgs)
+            
+            # to get val loss. 
+            model.train()
+            loss_dict = model(imgs,annotations)
+            losses = sum(loss for loss in loss_dict.values())
+            running_test_loss+=losses.item()
+           
+    test_loss_final = running_test_loss/len(val_loader)
+    print("Test/Val Loss: {}".format(test_loss_final))
+    
+    return model, test_loss_final
 
 
 def train(train_loader, model, criterion, optimizer, epoch, device):
@@ -134,59 +181,67 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     model.train()
     model.to(device)
     running_loss = 0
-
     for imgs, annotations in train_loader:
+        
         imgs = list(img.to(device) for img in imgs)
         annotations = [{k: v.to(device) for k, v in t.items()} for t in annotations]
-
+        optimizer.zero_grad()   
         
-        optimizer.zero_grad() 
-        inputs, labels = sample_batched['image'].float(), sample_batched["label"]
-
-        inputs, labels = inputs.to(device), labels.to(device)     
-        log_ps = model(inputs)
-        loss   = criterion(log_ps,labels)
-        
-        loss.backward()
+        loss_dict = model(imgs, annotations)
+        losses = sum(loss for loss in loss_dict.values())
+        losses.backward()
         optimizer.step()
-        running_loss += loss.item()
+        running_loss += losses.item()
+   
     train_loss = running_loss/len(train_loader)
     print("Train Loss: {}".format(train_loss))
-
+    
     return model, train_loss
 
-
+def save_checkpoint(model, epoch):
+    """
+    saves model checkpoint along with epoch value
+    """
+    ckpt_path = 'mask_detection.pth'
+    torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict()}, ckpt_path)
 
 
 ### --------------------TRAIN MODEL--------------------------------
 def main():
 
     data_transform = transforms.Compose([transforms.ToTensor(),])
-    dataset = MaskDataset(data_transform)
     
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=4,shuffle=True, collate_fn=collate_fn)
+    # prefix as the first parameter and transformation as the second
+    train_dataset = MaskDataset("train_",data_transform)
+    test_dataset = MaskDataset("test_",data_transform)
+    
+    # create data-loaders
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1,shuffle=True, collate_fn=collate_fn)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=1,shuffle=True, collate_fn=collate_fn)
+    
+    # initialise model
     model = get_model_instance_segmentation(3)
     model.to(device)
-
+   
     losses_dict= {'train': {}, 'test': {}, 'accuracy': {}}
-    criterion = nn.NLLLoss()
-
+    criterion = torch.nn.NLLLoss()
+    epochs = 2
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
     for e in range(epochs):
         print("{} out of {}".format(e+1, epochs))
         time.sleep(1)
         model, train_loss = train(train_dataloader, model, criterion, optimizer, epochs,device)
-        model, test_loss, test_accuracy = validate(val_dataloader, model, criterion,device)
-        current_metrics = [e,train_loss, test_loss,test_accuracy]
+        model, test_loss = validate(test_dataloader, model, criterion,device)
+        current_metrics = [e,train_loss, test_loss]
         losses_dict["train"][e] = train_loss
         losses_dict["test"][e] = test_loss
-        losses_dict["accuracy"][e] = test_accuracy
-        if e % 2 == 0:
-            checkpoints_files = save_checkpoint()
-    
-    return checkpoints_files
-
-
+        if (e+1) % 2 == 0:
+            checkpoints_files = save_checkpoint(model, e)
+    return
 
 
 if __name__ == "__main__":
