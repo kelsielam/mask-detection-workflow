@@ -39,7 +39,6 @@ def create_ann_list(filenames):
 
 def create_augmented_filelist(filenames, i):
     files_ids = []
-
     for filename in filenames:
         stringList = filename.split(".")
         tempName = stringList[0]
