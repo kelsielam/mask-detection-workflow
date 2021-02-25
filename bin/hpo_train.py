@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-
-"""
-MACHINE LEARNING WORKFLOWS 
-
-Model Training
-"""
+import optuna
 import glob,os
 import numpy as np 
 import pandas as pd
@@ -13,6 +7,7 @@ from PIL import Image
 import PIL
 import random
 import torch
+import argparse
 import torchvision
 from collections import Counter
 from torchvision import transforms, datasets, models
@@ -21,11 +16,10 @@ import matplotlib.pyplot as plt
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import matplotlib.patches as patches
 import time
-
+import joblib
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-# ----------- HELPER FUNCTIONS ---------
 
 def generate_box(obj):
     """
@@ -93,10 +87,6 @@ def get_model_instance_segmentation(num_classes):
     # replace the pre-trained head with a new one
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
-# ----------------------------------------------------------------
-
-
-#-------------- DATASET CLASS ------------------------------------
 
 class MaskDataset(object):
     def __init__(self, prefix, transforms):
@@ -106,6 +96,7 @@ class MaskDataset(object):
             self.imgs = glob.glob(prefix+"*.png")+glob.glob("val_*.png")
         else:
             self.imgs = glob.glob(prefix+"*.png")
+        
         self.size = len(self.imgs)
 
     def __getitem__(self, idx):
@@ -152,7 +143,7 @@ def plot_image(img_tensor, pred, annotation):
     plt.show()
 
     
-def validate(val_loader, model, criterion,device):
+def validate(val_loader, model, device):
 
     model.eval()
     model.to(device)
@@ -162,21 +153,23 @@ def validate(val_loader, model, criterion,device):
         for imgs, annotations in val_loader:
             model.eval()
             imgs = list(img.to(device) for img in imgs)
-#             outputs = model(imgs) Not required if not calculating accuracy
+            annotations = [{k: v.to(device) for k, v in t.items()} for t in annotations]
+        
+#             outputs = model(imgs) - Not needed since we aren't calculating accuracy
             
             # to get val loss. 
             model.train()
             loss_dict = model(imgs,annotations)
             losses = sum(loss for loss in loss_dict.values())
             running_test_loss+=losses.item()
-           
+         
     test_loss_final = running_test_loss/len(val_loader)
     print("Test/Val Loss: {}".format(test_loss_final))
     
     return model, test_loss_final
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device):
+def train(train_loader, model, optimizer, epoch, device):
 
     model.train()
     model.to(device)
@@ -192,7 +185,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
         losses.backward()
         optimizer.step()
         running_loss += losses.item()
-   
+    
     train_loss = running_loss/len(train_loader)
     print("Train Loss: {}".format(train_loss))
     
@@ -206,20 +199,13 @@ def save_checkpoint(model, epoch):
     torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict()}, ckpt_path)
-
-def get_params():
     
-    f = open("best_hpo_params.txt","r")
-    params = f.readline()
-    params = eval(params)
-    lr = float(params['params']['lr'])
-    optim = params['params']['optimizer']
-    f.close()
+def hpo_monitor(study, trial):
+    joblib.dump(study,"hpo-mask-detection.pkl")
     
-    return lr, optim
-
-### --------------------TRAIN MODEL--------------------------------
-def main():
+def objective(trial):
+    
+    print("Performing trial {}".format(trial.number))
 
     data_transform = transforms.Compose([transforms.ToTensor(),])
     
@@ -236,27 +222,91 @@ def main():
     model.to(device)
    
     losses_dict= {'train': {}, 'test': {}, 'accuracy': {}}
-    criterion = torch.nn.NLLLoss()
-    epochs = 2
-    lr, optim = get_params()
+    
     params = [p for p in model.parameters() if p.requires_grad]
-    if optim == "Adam":
+    
+    optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
+    
+    lr = trial.suggest_float("lr",1e-5, 1e-1, log=True)
+    
+    if optimizer_name == "SGD":
+        optimizer = torch.optim.SGD(params, lr=lr, momentum=0.9, weight_decay=0.005)
+    else:
         optimizer = torch.optim.Adam(params, lr=lr)
-    elif optim == "SGD":
-        optimizer = torch.optim.SGD(params, lr=lr, momentum=0.9, weight_decay=0.0005)
-
-    for e in range(epochs):
-        print("{} out of {}".format(e+1, epochs))
+        
+    total_loss = 0
+    
+    for e in range(EPOCHS):
+        
+        print("{} out of {}".format(e+1, EPOCHS))
         time.sleep(1)
-        model, train_loss = train(train_dataloader, model, criterion, optimizer, epochs,device)
-        model, test_loss = validate(test_dataloader, model, criterion,device)
+        model, train_loss = train(train_dataloader, model, optimizer, EPOCHS, device)
+        model, test_loss = validate(test_dataloader, model, device)
         current_metrics = [e,train_loss, test_loss]
         losses_dict["train"][e] = train_loss
         losses_dict["test"][e] = test_loss
-        if (e+1) % 2 == 0:
-            save_checkpoint(model, e)
+        total_loss += test_loss
+       
+        # Handle pruning based on the intermediate value.
+        if trial.should_prune():
+            raise optuna.exceptions.TrialPruned()
+    
+    total_loss/=EPOCHS
+    
+    return total_loss
+
+
+def get_best_params(best):
+    
+    parameters = {}
+    parameters["trial_id"] = best.number
+    parameters["value"] = best.value
+    parameters["params"] = best.params
+    
+    f = open("best_hpo_params.txt","w")
+    f.write(str(parameters))
+    f.close()
+    
+def load_study():
+    
+    try:
+        STUDY = joblib.load("hpo-mask-detection.pkl")
+        print("Successfully loaded the existing study!")
+        
+        rem_trials = TRIALS - len(STUDY.trials_dataframe())
+        
+        if rem_trials > 0:
+            STUDY.optimize(objective, n_trials=rem_trials, callbacks=[hpo_monitor])
+        else:
+            print("All trials done!")
+            pass
+        
+    except Exception as e:
+        print(e)
+        print("Creating a new study!")
+        
+        STUDY = optuna.create_study(study_name='mask_detection')
+        STUDY.optimize(objective, n_trials=TRIALS, callbacks=[hpo_monitor])
+
+    best_trial = STUDY.best_trial
+    get_best_params(best_trial)
     return
 
-
+def main():
+    
+    global EPOCHS
+    global TRIALS
+    parser = argparse.ArgumentParser(description="Mask-detection Workflow")
+    parser.add_argument('--epochs', default=20, type=int, help="Enter number of epochs to train the model")
+    parser.add_argument('--trials', type=int, default=100, help="Enter number of trials to perform HPO")
+    args = parser.parse_args()
+    
+    EPOCHS = args.epochs
+    TRIALS = args.trials
+    load_study()
+    
+    return
+    
+    
 if __name__ == "__main__":
     main()
