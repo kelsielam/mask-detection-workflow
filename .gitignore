@@ -11,4 +11,8 @@ Scratch.ipynb
 .DS_Store
 .ipynb_checkpoints/
 Images_saved
+tils/__pycache__/
+pegasus.properties
+scratch/hpo_study_mask_detection.pkl
+hpo_study_mask_detection.pkl
 utils/__pycache__/
