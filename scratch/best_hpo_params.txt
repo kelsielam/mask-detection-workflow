@@ -1,0 +1,1 @@
+{'trial_id': 2, 'value': 0.4229821438590685, 'params': {'optimizer': 'Adam', 'lr': 9.45641995023517e-05}}

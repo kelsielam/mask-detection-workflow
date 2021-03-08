@@ -19,7 +19,7 @@ import matplotlib.patches as patches
 import time
 import joblib
 import re
-from IPython import embed
+
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -110,12 +110,8 @@ class MaskDataset(object):
 
         ind = re.findall(r'\d+', self.imgs[idx])[0]
         file_label = 'maksssksksss'+ ind + '.xml'
-        print(file_label)
-
         img = Image.open(file_image).convert("RGB")
         #Generate Label
-        print("About to generate target")
-        print(ind)
         target = generate_target(int(ind), file_label)
         
         if self.transforms is not None:
@@ -161,8 +157,7 @@ def validate(val_loader, model, device):
             model.eval()
             imgs = list(img.to(device) for img in imgs)
             annotations = [{k: v.to(device) for k, v in t.items()} for t in annotations]
-        
-#             outputs = model(imgs) - Not needed since we aren't calculating accuracy
+            #outputs = model(imgs) - Not needed since we aren't calculating accuracy
             
             # to get val loss. 
             model.train()
@@ -298,6 +293,7 @@ def load_study():
 
     best_trial = STUDY.best_trial
     get_best_params(best_trial)
+
     return
 
 def main():
