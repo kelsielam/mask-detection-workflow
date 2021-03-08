@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import optuna
 import glob,os
 import numpy as np 
@@ -106,8 +107,6 @@ class MaskDataset(object):
         # load images ad masks
 
         file_image = self.imgs[idx]
-
-
         ind = re.findall(r'\d+', self.imgs[idx])[0]
         file_label = 'maksssksksss'+ ind + '.xml'
         img = Image.open(file_image).convert("RGB")
@@ -193,17 +192,10 @@ def train(train_loader, model, optimizer, epoch, device):
     
     return model, train_loss
 
-def save_checkpoint(model, epoch):
-    """
-    saves model checkpoint along with epoch value
-    """
-    ckpt_path = 'mask_detection.pth'
-    torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict()}, ckpt_path)
+
     
 def hpo_monitor(study, trial):
-    joblib.dump(study,"hpo-mask-detection.pkl")
+    joblib.dump(study,"hpo_study_mask_detection.pkl")
     
 
 
@@ -228,10 +220,8 @@ def objective(trial):
    
     losses_dict= {'train': {}, 'test': {}, 'accuracy': {}}
     
-    params = [p for p in model.parameters() if p.requires_grad]
-    
-    optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "SGD"])
-    
+    params = [p for p in model.parameters() if p.requires_grad]    
+    optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "SGD"])   
     lr = trial.suggest_float("lr",1e-5, 1e-1, log=True)
     
     if optimizer_name == "SGD":
@@ -244,7 +234,6 @@ def objective(trial):
     for e in range(EPOCHS):
         
         print("{} out of {}".format(e+1, EPOCHS))
-        time.sleep(1)
         model, train_loss = train(train_dataloader, model, optimizer, EPOCHS, device)
         model, test_loss = validate(test_dataloader, model, device)
         current_metrics = [e,train_loss, test_loss]
@@ -262,11 +251,17 @@ def objective(trial):
 
 
 def get_best_params(best):
-    
+
     parameters = {}
-    parameters["trial_id"] = best.number
-    parameters["value"] = best.value
-    parameters["params"] = best.params
+
+    try:
+        parameters["trial_id"] = best.number
+        parameters["value"] = best.value
+        parameters["params"] = best.params
+    except Exception as e:
+        parameters["trial_id"] = 0
+        parameters["value"] =  0.00
+        parameters["params"] = {"optimizer" : "Adam", "lr": 0.001}      
     
     f = open("best_hpo_params.txt","w")
     f.write(str(parameters))
@@ -276,7 +271,7 @@ def get_best_params(best):
 def load_study():
     
     try:
-        STUDY = joblib.load("hpo-mask-detection.pkl")
+        STUDY = joblib.load("hpo_study_mask_detection.pkl")
         print("Successfully loaded the existing study!")       
         rem_trials = TRIALS - len(STUDY.trials_dataframe())
         
@@ -302,8 +297,8 @@ def main():
     global EPOCHS
     global TRIALS
     parser = argparse.ArgumentParser(description="Mask-detection Workflow")
-    parser.add_argument('--epochs', default=20, type=int, help="Enter number of epochs to train the model")
-    parser.add_argument('--trials', type=int, default=10, help="Enter number of trials to perform HPO")
+    parser.add_argument('--epochs', default=2, type=int, help="Enter number of epochs to train the model")
+    parser.add_argument('--trials', type=int, default=2, help="Enter number of trials to perform HPO")
     args = parser.parse_args()
     
     EPOCHS = args.epochs
