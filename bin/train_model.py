@@ -251,7 +251,6 @@ def main():
 
     for e in range(epochs):
         print("{} out of {}".format(e+1, epochs))
-        time.sleep(1)
         model, train_loss = train(train_dataloader, model, criterion, optimizer, epochs,device)
         model, test_loss = validate(test_dataloader, model, criterion,device)
         current_metrics = [e,train_loss, test_loss]
