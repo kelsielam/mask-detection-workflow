@@ -18,6 +18,8 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import matplotlib.patches as patches
 import time
 import joblib
+import re
+
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -104,10 +106,10 @@ class MaskDataset(object):
         # load images ad masks
 
         file_image = self.imgs[idx]
-        msk = len("maksssksksss")
-        ind = self.imgs[idx].split("_")[1][msk:-4]
-        file_label = 'maksssksksss'+ ind + '.xml'
 
+
+        ind = re.findall(r'\d+', self.imgs[idx])[0]
+        file_label = 'maksssksksss'+ ind + '.xml'
         img = Image.open(file_image).convert("RGB")
         #Generate Label
         target = generate_target(int(ind), file_label)
@@ -155,8 +157,7 @@ def validate(val_loader, model, device):
             model.eval()
             imgs = list(img.to(device) for img in imgs)
             annotations = [{k: v.to(device) for k, v in t.items()} for t in annotations]
-        
-#             outputs = model(imgs) - Not needed since we aren't calculating accuracy
+            #outputs = model(imgs) - Not needed since we aren't calculating accuracy
             
             # to get val loss. 
             model.train()
@@ -204,6 +205,9 @@ def save_checkpoint(model, epoch):
 def hpo_monitor(study, trial):
     joblib.dump(study,"hpo-mask-detection.pkl")
     
+
+
+
 def objective(trial):
     
     print("Performing trial {}".format(trial.number))
@@ -267,23 +271,21 @@ def get_best_params(best):
     f = open("best_hpo_params.txt","w")
     f.write(str(parameters))
     f.close()
-    
+
+   
 def load_study():
     
     try:
         STUDY = joblib.load("hpo-mask-detection.pkl")
-        print("Successfully loaded the existing study!")
-        
+        print("Successfully loaded the existing study!")       
         rem_trials = TRIALS - len(STUDY.trials_dataframe())
         
         if rem_trials > 0:
             STUDY.optimize(objective, n_trials=rem_trials, callbacks=[hpo_monitor])
         else:
             print("All trials done!")
-            pass
         
     except Exception as e:
-        print(e)
         print("Creating a new study!")
         
         STUDY = optuna.create_study(study_name='mask_detection')
@@ -291,15 +293,17 @@ def load_study():
 
     best_trial = STUDY.best_trial
     get_best_params(best_trial)
+
     return
 
 def main():
+    print(device)
     
     global EPOCHS
     global TRIALS
     parser = argparse.ArgumentParser(description="Mask-detection Workflow")
     parser.add_argument('--epochs', default=20, type=int, help="Enter number of epochs to train the model")
-    parser.add_argument('--trials', type=int, default=100, help="Enter number of trials to perform HPO")
+    parser.add_argument('--trials', type=int, default=10, help="Enter number of trials to perform HPO")
     args = parser.parse_args()
     
     EPOCHS = args.epochs

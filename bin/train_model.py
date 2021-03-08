@@ -21,8 +21,9 @@ import matplotlib.pyplot as plt
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import matplotlib.patches as patches
 import time
+import re
 
-
+#device = torch.device('cpu')
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 # ----------- HELPER FUNCTIONS ---------
@@ -112,8 +113,7 @@ class MaskDataset(object):
         # load images ad masks
 
         file_image = self.imgs[idx]
-        msk = len("maksssksksss")
-        ind = self.imgs[idx].split("_")[1][msk:-4]
+        ind = re.findall(r'\d+', self.imgs[idx])[0]
         file_label = 'maksssksksss'+ ind + '.xml'
 
         img = Image.open(file_image).convert("RGB")
@@ -162,7 +162,8 @@ def validate(val_loader, model, criterion,device):
         for imgs, annotations in val_loader:
             model.eval()
             imgs = list(img.to(device) for img in imgs)
-#             outputs = model(imgs) Not required if not calculating accuracy
+            annotations = [{k: v.to(device) for k, v in t.items()} for t in annotations]
+            # outputs = model(imgs) Not required if not calculating accuracy
             
             # to get val loss. 
             model.train()
@@ -202,19 +203,22 @@ def save_checkpoint(model, epoch):
     """
     saves model checkpoint along with epoch value
     """
-    ckpt_path = 'mask_detection.pth'
+    ckpt_path = 'mask_detection_model.pth'
     torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict()}, ckpt_path)
 
 def get_params():
-    
-    f = open("best_hpo_params.txt","r")
-    params = f.readline()
-    params = eval(params)
-    lr = float(params['params']['lr'])
-    optim = params['params']['optimizer']
-    f.close()
+    try:
+        f = open("best_hpo_params.txt","r")
+        params = f.readline()
+        params = eval(params)
+        lr = float(params['params']['lr'])
+        optim = params['params']['optimizer']
+        f.close()
+    except Exception as e:
+        lr    = 0.001
+        optim = "Adam"
     
     return lr, optim
 
